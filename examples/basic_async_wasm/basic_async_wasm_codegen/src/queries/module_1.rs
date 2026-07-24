@@ -20,14 +20,7 @@ impl InsertBookStmt {
         title: &'a T1,
     ) -> Result<u64, tokio_postgres::Error> {
         client
-            .execute_typed(
-                self.0,
-                &[(
-                    title,
-                    postgres_types::Type::from_oid(1043)
-                        .expect("Cornucopia validated this built-in PostgreSQL parameter type"),
-                )],
-            )
+            .execute_typed(self.0, &[(title, postgres_types::Type::VARCHAR)])
             .await
     }
 }

@@ -1,3 +1,4 @@
+use postgres_types::Type;
 use quote::{format_ident, quote};
 
 use super::{GenCtx, idx_char, vfs::Vfs};
@@ -6,6 +7,69 @@ use crate::{
     config::Config,
     prepare_queries::{Preparation, PreparedItem, PreparedModule, PreparedQuery},
 };
+
+fn builtin_type_const(ty: &Type) -> Option<proc_macro2::Ident> {
+    let name = match *ty {
+        Type::BOOL => "BOOL",
+        Type::BYTEA => "BYTEA",
+        Type::CHAR => "CHAR",
+        Type::NAME => "NAME",
+        Type::INT8 => "INT8",
+        Type::INT2 => "INT2",
+        Type::INT4 => "INT4",
+        Type::TEXT => "TEXT",
+        Type::FLOAT4 => "FLOAT4",
+        Type::FLOAT8 => "FLOAT8",
+        Type::MACADDR => "MACADDR",
+        Type::INET => "INET",
+        Type::BPCHAR => "BPCHAR",
+        Type::VARCHAR => "VARCHAR",
+        Type::DATE => "DATE",
+        Type::TIME => "TIME",
+        Type::TIMESTAMP => "TIMESTAMP",
+        Type::TIMESTAMPTZ => "TIMESTAMPTZ",
+        Type::NUMERIC => "NUMERIC",
+        Type::UUID => "UUID",
+        Type::JSON => "JSON",
+        Type::JSONB => "JSONB",
+        Type::BOOL_ARRAY => "BOOL_ARRAY",
+        Type::BYTEA_ARRAY => "BYTEA_ARRAY",
+        Type::CHAR_ARRAY => "CHAR_ARRAY",
+        Type::NAME_ARRAY => "NAME_ARRAY",
+        Type::INT8_ARRAY => "INT8_ARRAY",
+        Type::INT2_ARRAY => "INT2_ARRAY",
+        Type::INT4_ARRAY => "INT4_ARRAY",
+        Type::TEXT_ARRAY => "TEXT_ARRAY",
+        Type::FLOAT4_ARRAY => "FLOAT4_ARRAY",
+        Type::FLOAT8_ARRAY => "FLOAT8_ARRAY",
+        Type::MACADDR_ARRAY => "MACADDR_ARRAY",
+        Type::INET_ARRAY => "INET_ARRAY",
+        Type::BPCHAR_ARRAY => "BPCHAR_ARRAY",
+        Type::VARCHAR_ARRAY => "VARCHAR_ARRAY",
+        Type::DATE_ARRAY => "DATE_ARRAY",
+        Type::TIME_ARRAY => "TIME_ARRAY",
+        Type::TIMESTAMP_ARRAY => "TIMESTAMP_ARRAY",
+        Type::TIMESTAMPTZ_ARRAY => "TIMESTAMPTZ_ARRAY",
+        Type::NUMERIC_ARRAY => "NUMERIC_ARRAY",
+        Type::UUID_ARRAY => "UUID_ARRAY",
+        Type::JSON_ARRAY => "JSON_ARRAY",
+        Type::JSONB_ARRAY => "JSONB_ARRAY",
+        _ => return None,
+    };
+    Some(format_ident!("{name}"))
+}
+
+fn gen_parameter_pg_type(ty: &Type) -> proc_macro2::TokenStream {
+    if let Some(ident) = builtin_type_const(ty) {
+        quote!(postgres_types::Type::#ident)
+    } else {
+        let oid = proc_macro2::Literal::u32_unsuffixed(ty.oid());
+        quote! {
+            postgres_types::Type::from_oid(#oid)
+                .expect("Cornucopia validated this built-in PostgreSQL parameter type")
+        }
+    }
+}
 
 fn gen_params_struct(params: &PreparedItem, ctx: &GenCtx) -> proc_macro2::TokenStream {
     let PreparedItem {
@@ -443,13 +507,7 @@ fn gen_query_fn(
 
     let params_pg_ty: Vec<_> = order
         .iter()
-        .map(|idx| {
-            let oid = proc_macro2::Literal::u32_unsuffixed(param_field[*idx].pg_ty.oid());
-            quote! {
-                postgres_types::Type::from_oid(#oid)
-                    .expect("Cornucopia validated this built-in PostgreSQL parameter type")
-            }
-        })
+        .map(|idx| gen_parameter_pg_type(&param_field[*idx].pg_ty))
         .collect();
 
     let typed_params_init = (!config.prepared_statements).then_some(quote! {
@@ -865,4 +923,36 @@ pub(crate) fn gen_queries(vfs: &mut Vfs, preparation: &Preparation, config: &Con
     };
 
     vfs.add("src/queries.rs", tokens);
+}
+
+#[cfg(test)]
+mod tests {
+    use postgres_types::Type;
+    use quote::quote;
+
+    use super::gen_parameter_pg_type;
+
+    #[test]
+    fn parameter_types_use_constants_for_supported_scalars_and_arrays() {
+        assert_eq!(
+            gen_parameter_pg_type(&Type::BOOL).to_string(),
+            quote!(postgres_types::Type::BOOL).to_string()
+        );
+        assert_eq!(
+            gen_parameter_pg_type(&Type::TEXT_ARRAY).to_string(),
+            quote!(postgres_types::Type::TEXT_ARRAY).to_string()
+        );
+        assert_eq!(
+            gen_parameter_pg_type(&Type::JSONB).to_string(),
+            quote!(postgres_types::Type::JSONB).to_string()
+        );
+    }
+
+    #[test]
+    fn parameter_types_keep_an_oid_fallback_for_other_builtins() {
+        let generated = gen_parameter_pg_type(&Type::POINT).to_string();
+        assert!(generated.contains("Type :: from_oid"));
+        assert!(generated.contains("600"));
+        assert!(generated.contains("Cornucopia validated this built-in PostgreSQL parameter type"));
+    }
 }

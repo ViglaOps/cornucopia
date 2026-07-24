@@ -580,11 +580,7 @@ impl AuthorNameByIdStmt {
         StringQuery {
             client,
             params: [id],
-            typed_params: [(
-                id,
-                postgres_types::Type::from_oid(23)
-                    .expect("Cornucopia validated this built-in PostgreSQL parameter type"),
-            )],
+            typed_params: [(id, postgres_types::Type::INT4)],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |row| Ok(row.try_get(0)?),
@@ -615,15 +611,7 @@ impl AuthorNameStartingWithStmt {
         AuthorNameStartingWithQuery {
             client,
             params: [start_str],
-            typed_params: [
-                (
-                    start_str,
-                    postgres_types::Type::from_oid(25)
-                        .expect(
-                            "Cornucopia validated this built-in PostgreSQL parameter type",
-                        ),
-                ),
-            ],
+            typed_params: [(start_str, postgres_types::Type::TEXT)],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |
@@ -681,11 +669,7 @@ impl SelectVoiceActorWithCharacterStmt {
         VoiceActorQuery {
             client,
             params: [spongebob_character],
-            typed_params: [(
-                spongebob_character,
-                postgres_types::Type::from_oid(25)
-                    .expect("Cornucopia validated this built-in PostgreSQL parameter type"),
-            )],
+            typed_params: [(spongebob_character, postgres_types::Type::TEXT)],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |row| Ok(row.try_get(0)?),
@@ -757,11 +741,7 @@ impl BooksWithAnyTranslationStmt {
         StringQuery {
             client,
             params: [translations],
-            typed_params: [(
-                translations,
-                postgres_types::Type::from_oid(1009)
-                    .expect("Cornucopia validated this built-in PostgreSQL parameter type"),
-            )],
+            typed_params: [(translations, postgres_types::Type::TEXT_ARRAY)],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |row| Ok(row.try_get(0)?),
