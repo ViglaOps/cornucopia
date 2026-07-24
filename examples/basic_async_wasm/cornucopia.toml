@@ -2,6 +2,7 @@ destination = "basic_async_wasm_codegen"
 async = true
 sync = false
 deadpool = false
+prepared_statements = false
 
 [manifest.package]
 name = "basic_async_wasm_codegen"

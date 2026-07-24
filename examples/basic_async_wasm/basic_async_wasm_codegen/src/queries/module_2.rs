@@ -91,6 +91,7 @@ use futures::{self, StreamExt, TryStreamExt};
 pub struct AuthorsQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
     client: &'c C,
     params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    typed_params: [(&'a (dyn postgres_types::ToSql + Sync), postgres_types::Type); N],
     query: &'static str,
     cached: Option<&'s tokio_postgres::Statement>,
     extractor: fn(&tokio_postgres::Row) -> Result<AuthorsBorrowed, tokio_postgres::Error>,
@@ -104,6 +105,7 @@ where
         AuthorsQuery {
             client: self.client,
             params: self.params,
+            typed_params: self.typed_params,
             query: self.query,
             cached: self.cached,
             extractor: self.extractor,
@@ -111,16 +113,28 @@ where
         }
     }
     pub async fn one(self) -> Result<T, tokio_postgres::Error> {
-        let row =
-            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        let row = crate::client::async_::one(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok((self.mapper)((self.extractor)(&row)?))
     }
     pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
         self.iter().await?.try_collect().await
     }
     pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
-        let opt_row =
-            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        let opt_row = crate::client::async_::opt(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok(opt_row
             .map(|row| {
                 let extracted = (self.extractor)(&row)?;
@@ -138,6 +152,7 @@ where
             self.client,
             self.query,
             crate::slice_iter(&self.params),
+            &self.typed_params,
             self.cached,
         )
         .await?;
@@ -155,6 +170,7 @@ where
 pub struct StringQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
     client: &'c C,
     params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    typed_params: [(&'a (dyn postgres_types::ToSql + Sync), postgres_types::Type); N],
     query: &'static str,
     cached: Option<&'s tokio_postgres::Statement>,
     extractor: fn(&tokio_postgres::Row) -> Result<&str, tokio_postgres::Error>,
@@ -168,6 +184,7 @@ where
         StringQuery {
             client: self.client,
             params: self.params,
+            typed_params: self.typed_params,
             query: self.query,
             cached: self.cached,
             extractor: self.extractor,
@@ -175,16 +192,28 @@ where
         }
     }
     pub async fn one(self) -> Result<T, tokio_postgres::Error> {
-        let row =
-            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        let row = crate::client::async_::one(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok((self.mapper)((self.extractor)(&row)?))
     }
     pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
         self.iter().await?.try_collect().await
     }
     pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
-        let opt_row =
-            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        let opt_row = crate::client::async_::opt(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok(opt_row
             .map(|row| {
                 let extracted = (self.extractor)(&row)?;
@@ -202,6 +231,7 @@ where
             self.client,
             self.query,
             crate::slice_iter(&self.params),
+            &self.typed_params,
             self.cached,
         )
         .await?;
@@ -219,6 +249,7 @@ where
 pub struct AuthorNameStartingWithQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
     client: &'c C,
     params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    typed_params: [(&'a (dyn postgres_types::ToSql + Sync), postgres_types::Type); N],
     query: &'static str,
     cached: Option<&'s tokio_postgres::Statement>,
     extractor:
@@ -236,6 +267,7 @@ where
         AuthorNameStartingWithQuery {
             client: self.client,
             params: self.params,
+            typed_params: self.typed_params,
             query: self.query,
             cached: self.cached,
             extractor: self.extractor,
@@ -243,16 +275,28 @@ where
         }
     }
     pub async fn one(self) -> Result<T, tokio_postgres::Error> {
-        let row =
-            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        let row = crate::client::async_::one(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok((self.mapper)((self.extractor)(&row)?))
     }
     pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
         self.iter().await?.try_collect().await
     }
     pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
-        let opt_row =
-            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        let opt_row = crate::client::async_::opt(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok(opt_row
             .map(|row| {
                 let extracted = (self.extractor)(&row)?;
@@ -270,6 +314,7 @@ where
             self.client,
             self.query,
             crate::slice_iter(&self.params),
+            &self.typed_params,
             self.cached,
         )
         .await?;
@@ -287,6 +332,7 @@ where
 pub struct VoiceActorQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
     client: &'c C,
     params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    typed_params: [(&'a (dyn postgres_types::ToSql + Sync), postgres_types::Type); N],
     query: &'static str,
     cached: Option<&'s tokio_postgres::Statement>,
     extractor:
@@ -304,6 +350,7 @@ where
         VoiceActorQuery {
             client: self.client,
             params: self.params,
+            typed_params: self.typed_params,
             query: self.query,
             cached: self.cached,
             extractor: self.extractor,
@@ -311,16 +358,28 @@ where
         }
     }
     pub async fn one(self) -> Result<T, tokio_postgres::Error> {
-        let row =
-            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        let row = crate::client::async_::one(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok((self.mapper)((self.extractor)(&row)?))
     }
     pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
         self.iter().await?.try_collect().await
     }
     pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
-        let opt_row =
-            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        let opt_row = crate::client::async_::opt(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok(opt_row
             .map(|row| {
                 let extracted = (self.extractor)(&row)?;
@@ -338,6 +397,7 @@ where
             self.client,
             self.query,
             crate::slice_iter(&self.params),
+            &self.typed_params,
             self.cached,
         )
         .await?;
@@ -355,6 +415,7 @@ where
 pub struct SelectTranslationsQuery<'c, 'a, 's, C: GenericClient, T, const N: usize> {
     client: &'c C,
     params: [&'a (dyn postgres_types::ToSql + Sync); N],
+    typed_params: [(&'a (dyn postgres_types::ToSql + Sync), postgres_types::Type); N],
     query: &'static str,
     cached: Option<&'s tokio_postgres::Statement>,
     extractor:
@@ -372,6 +433,7 @@ where
         SelectTranslationsQuery {
             client: self.client,
             params: self.params,
+            typed_params: self.typed_params,
             query: self.query,
             cached: self.cached,
             extractor: self.extractor,
@@ -379,16 +441,28 @@ where
         }
     }
     pub async fn one(self) -> Result<T, tokio_postgres::Error> {
-        let row =
-            crate::client::async_::one(self.client, self.query, &self.params, self.cached).await?;
+        let row = crate::client::async_::one(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok((self.mapper)((self.extractor)(&row)?))
     }
     pub async fn all(self) -> Result<Vec<T>, tokio_postgres::Error> {
         self.iter().await?.try_collect().await
     }
     pub async fn opt(self) -> Result<Option<T>, tokio_postgres::Error> {
-        let opt_row =
-            crate::client::async_::opt(self.client, self.query, &self.params, self.cached).await?;
+        let opt_row = crate::client::async_::opt(
+            self.client,
+            self.query,
+            &self.params,
+            &self.typed_params,
+            self.cached,
+        )
+        .await?;
         Ok(opt_row
             .map(|row| {
                 let extracted = (self.extractor)(&row)?;
@@ -406,6 +480,7 @@ where
             self.client,
             self.query,
             crate::slice_iter(&self.params),
+            &self.typed_params,
             self.cached,
         )
         .await?;
@@ -439,6 +514,7 @@ impl AuthorsStmt {
         AuthorsQuery {
             client,
             params: [],
+            typed_params: [],
             query: self.0,
             cached: self.1.as_ref(),
             extractor:
@@ -473,6 +549,7 @@ impl BooksStmt {
         StringQuery {
             client,
             params: [],
+            typed_params: [],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |row| Ok(row.try_get(0)?),
@@ -503,6 +580,11 @@ impl AuthorNameByIdStmt {
         StringQuery {
             client,
             params: [id],
+            typed_params: [(
+                id,
+                postgres_types::Type::from_oid(23)
+                    .expect("Cornucopia validated this built-in PostgreSQL parameter type"),
+            )],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |row| Ok(row.try_get(0)?),
@@ -533,6 +615,15 @@ impl AuthorNameStartingWithStmt {
         AuthorNameStartingWithQuery {
             client,
             params: [start_str],
+            typed_params: [
+                (
+                    start_str,
+                    postgres_types::Type::from_oid(25)
+                        .expect(
+                            "Cornucopia validated this built-in PostgreSQL parameter type",
+                        ),
+                ),
+            ],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |
@@ -570,7 +661,7 @@ impl<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>
 pub struct SelectVoiceActorWithCharacterStmt(&'static str, Option<tokio_postgres::Statement>);
 pub fn select_voice_actor_with_character() -> SelectVoiceActorWithCharacterStmt {
     SelectVoiceActorWithCharacterStmt(
-        "SELECT voice_actor FROM spongebob_voice_actors WHERE character = $1",
+        "SELECT voice_actor FROM spongebob_voice_actors WHERE character = $1::text::spongebob_character",
         None,
     )
 }
@@ -582,14 +673,19 @@ impl SelectVoiceActorWithCharacterStmt {
         self.1 = Some(client.prepare(self.0).await?);
         Ok(self)
     }
-    pub fn bind<'c, 'a, 's, C: GenericClient>(
+    pub fn bind<'c, 'a, 's, C: GenericClient, T1: crate::StringSql>(
         &'s self,
         client: &'c C,
-        spongebob_character: &'a crate::types::SpongebobCharacter,
+        spongebob_character: &'a T1,
     ) -> VoiceActorQuery<'c, 'a, 's, C, crate::types::VoiceActor, 1> {
         VoiceActorQuery {
             client,
             params: [spongebob_character],
+            typed_params: [(
+                spongebob_character,
+                postgres_types::Type::from_oid(25)
+                    .expect("Cornucopia validated this built-in PostgreSQL parameter type"),
+            )],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |row| Ok(row.try_get(0)?),
@@ -616,6 +712,7 @@ impl SelectTranslationsStmt {
         SelectTranslationsQuery {
             client,
             params: [],
+            typed_params: [],
             query: self.0,
             cached: self.1.as_ref(),
             extractor: |
@@ -627,6 +724,48 @@ impl SelectTranslationsStmt {
                 })
             },
             mapper: |it| SelectTranslations::from(it),
+        }
+    }
+}
+pub struct BooksWithAnyTranslationStmt(&'static str, Option<tokio_postgres::Statement>);
+pub fn books_with_any_translation() -> BooksWithAnyTranslationStmt {
+    BooksWithAnyTranslationStmt(
+        "SELECT title FROM books WHERE translations && $1::text[]",
+        None,
+    )
+}
+impl BooksWithAnyTranslationStmt {
+    pub async fn prepare<'a, C: GenericClient>(
+        mut self,
+        client: &'a C,
+    ) -> Result<Self, tokio_postgres::Error> {
+        self.1 = Some(client.prepare(self.0).await?);
+        Ok(self)
+    }
+    pub fn bind<
+        'c,
+        'a,
+        's,
+        C: GenericClient,
+        T1: crate::StringSql,
+        T2: crate::ArraySql<Item = T1>,
+    >(
+        &'s self,
+        client: &'c C,
+        translations: &'a T2,
+    ) -> StringQuery<'c, 'a, 's, C, String, 1> {
+        StringQuery {
+            client,
+            params: [translations],
+            typed_params: [(
+                translations,
+                postgres_types::Type::from_oid(1009)
+                    .expect("Cornucopia validated this built-in PostgreSQL parameter type"),
+            )],
+            query: self.0,
+            cached: self.1.as_ref(),
+            extractor: |row| Ok(row.try_get(0)?),
+            mapper: |it| it.into(),
         }
     }
 }

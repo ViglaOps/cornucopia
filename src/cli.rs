@@ -113,6 +113,10 @@ struct CommonArgs {
     /// Generate deadpool-postgres client support
     #[clap(long)]
     deadpool: Option<bool>,
+
+    /// Use prepared statements when executing generated queries
+    #[clap(long)]
+    prepared_statements: Option<bool>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -126,6 +130,7 @@ pub fn run() -> Result<(), Error> {
         sync,
         r#async,
         deadpool,
+        prepared_statements,
     } = action.args();
 
     let mut cfg = match config.is_file() {
@@ -138,6 +143,7 @@ pub fn run() -> Result<(), Error> {
     cfg.sync = sync.unwrap_or(cfg.sync);
     cfg.r#async = r#async.unwrap_or(false) || !cfg.sync;
     cfg.deadpool = deadpool.unwrap_or(cfg.deadpool);
+    cfg.prepared_statements = prepared_statements.unwrap_or(cfg.prepared_statements);
     // Prevent wrong directory being accidentally deleted
     if !cfg.destination.ends_with("cornucopia")
         && (cfg.destination.exists() && !cfg.destination.join("Cargo.toml").exists())

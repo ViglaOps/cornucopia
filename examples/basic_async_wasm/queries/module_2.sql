@@ -37,7 +37,7 @@ SELECT
 FROM
     spongebob_voice_actors
 WHERE
-    character = :spongebob_character;
+    character = :spongebob_character::text::spongebob_character;
 
 --! select_translations
 SELECT
@@ -45,3 +45,11 @@ SELECT
     translations
 FROM
     books;
+
+--! books_with_any_translation
+SELECT
+    title
+FROM
+    books
+WHERE
+    translations && :translations::text[];

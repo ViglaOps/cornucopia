@@ -15,36 +15,33 @@ pub async fn one<C: GenericClient>(
     client: &C,
     query: &str,
     params: &[&(dyn ToSql + Sync)],
+    typed_params: &[(&(dyn ToSql + Sync), postgres_types::Type)],
     cached: Option<&Statement>,
 ) -> Result<Row, Error> {
     if let Some(cached) = cached {
         client.query_one(cached, params).await
-    } else if C::stmt_cache() {
-        let cached = client.prepare(query).await?;
-        client.query_one(&cached, params).await
     } else {
-        client.query_one(query, params).await
+        client.query_typed_one(query, typed_params).await
     }
 }
 pub async fn opt<C: GenericClient>(
     client: &C,
     query: &str,
     params: &[&(dyn ToSql + Sync)],
+    typed_params: &[(&(dyn ToSql + Sync), postgres_types::Type)],
     cached: Option<&Statement>,
 ) -> Result<Option<Row>, Error> {
     if let Some(cached) = cached {
         client.query_opt(cached, params).await
-    } else if C::stmt_cache() {
-        let cached = client.prepare(query).await?;
-        client.query_opt(&cached, params).await
     } else {
-        client.query_opt(query, params).await
+        client.query_typed_opt(query, typed_params).await
     }
 }
 pub async fn raw<C: GenericClient, P, I>(
     client: &C,
     query: &str,
     params: I,
+    typed_params: &[(&(dyn ToSql + Sync), postgres_types::Type)],
     cached: Option<&Statement>,
 ) -> Result<RowStream, Error>
 where
@@ -54,10 +51,7 @@ where
 {
     if let Some(cached) = cached {
         client.query_raw(cached, params).await
-    } else if C::stmt_cache() {
-        let cached = client.prepare(query).await?;
-        client.query_raw(&cached, params).await
     } else {
-        client.query_raw(query, params).await
+        client.query_typed_raw(query, typed_params).await
     }
 }

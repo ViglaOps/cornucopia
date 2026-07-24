@@ -72,6 +72,7 @@ impl Ident {
 pub struct PreparedField {
     pub(crate) ident: Ident,
     pub(crate) ty: Rc<CornucopiaType>,
+    pub(crate) pg_ty: Type,
     pub(crate) is_nullable: bool,
     pub(crate) is_inner_nullable: bool,          // Vec only
     pub(crate) attributes: Vec<String>,          // Custom field attributes
@@ -83,6 +84,7 @@ impl PreparedField {
     pub(crate) fn new(
         db_ident: String,
         ty: Rc<CornucopiaType>,
+        pg_ty: Type,
         nullity: Option<&NullableIdent>,
     ) -> Self {
         let mut nested_nullability = std::collections::HashMap::new();
@@ -97,6 +99,7 @@ impl PreparedField {
         Self {
             ident: Ident::new(db_ident),
             ty,
+            pg_ty,
             is_nullable: nullity.is_some_and(|it| it.nullable),
             is_inner_nullable: nullity.is_some_and(|it| it.inner_nullable),
             attributes: Vec::new(),
@@ -344,7 +347,7 @@ pub(crate) fn prepare(
 
     for module in modules {
         let (prepared_module, module_nested_specs) =
-            prepare_module(&stmts, module, &mut registrar)?;
+            prepare_module(&stmts, module, &mut registrar, config)?;
 
         prepared_modules.push(prepared_module);
 
@@ -449,8 +452,13 @@ fn prepare_type(
                                 (Vec::new(), Vec::new())
                             };
 
-                        PreparedField::new(field.name().to_string(), ty, nullity.as_ref())
-                            .with_attributes(attributes)
+                        PreparedField::new(
+                            field.name().to_string(),
+                            ty,
+                            field.type_().clone(),
+                            nullity.as_ref(),
+                        )
+                        .with_attributes(attributes)
                     })
                     .collect(),
             ),
@@ -492,6 +500,7 @@ fn prepare_module(
     stmts: &HashMap<String, Result<Statement, tokio_postgres::Error>>,
     module: Module,
     registrar: &mut TypeRegistrar,
+    config: &Config,
 ) -> Result<(PreparedModule, ModuleNestedSpecs), Error> {
     validation::validate_module(&module)?;
 
@@ -515,6 +524,7 @@ fn prepare_module(
             &module.types,
             query,
             &module.info,
+            config,
         )?;
 
         // Merge nested specs from this query
@@ -549,6 +559,7 @@ fn prepare_query(
         attributes,
     }: Query,
     module_info: &ModuleInfo,
+    config: &Config,
 ) -> Result<std::collections::HashMap<String, std::collections::HashMap<String, bool>>, Error> {
     let mut nested_specs: std::collections::HashMap<
         String,
@@ -583,6 +594,14 @@ fn prepare_query(
 
         let mut param_fields = Vec::new();
         for (col_name, col_ty) in params {
+            if !config.prepared_statements && !supports_unprepared_parameter(&col_ty) {
+                return Err(Error::UnsupportedTypedParameter {
+                    src: module_info.into(),
+                    query: name.span,
+                    col_name: col_name.value,
+                    col_ty: col_ty.to_string(),
+                });
+            }
             let nullity = nullable_params_fields
                 .iter()
                 .find(|x| x.name.value == col_name.value);
@@ -600,7 +619,8 @@ fn prepare_query(
             };
 
             param_fields.push(
-                PreparedField::new(col_name.value.clone(), ty, nullity).with_attributes(attributes),
+                PreparedField::new(col_name.value.clone(), ty, col_ty, nullity)
+                    .with_attributes(attributes),
             );
         }
         param_fields
@@ -664,8 +684,13 @@ fn prepare_query(
             };
 
             row_fields.push(
-                PreparedField::new(normalize_rust_name(&col_name), ty, nullity.copied())
-                    .with_attributes(attributes),
+                PreparedField::new(
+                    normalize_rust_name(&col_name),
+                    ty,
+                    col_ty.clone(),
+                    nullity.copied(),
+                )
+                .with_attributes(attributes),
             );
         }
         row_fields
@@ -700,6 +725,10 @@ fn prepare_query(
     );
 
     Ok(nested_specs)
+}
+
+fn supports_unprepared_parameter(ty: &Type) -> bool {
+    Type::from_oid(ty.oid()).is_some()
 }
 
 fn extract_composite_type_name(col_ty: &postgres_types::Type) -> Option<String> {
@@ -745,6 +774,20 @@ pub(crate) mod error {
         #[error(transparent)]
         #[diagnostic(transparent)]
         Validation(#[from] Box<ValidationError>),
+        #[error(
+            "Parameter `{col_name}` uses PostgreSQL type `{col_ty}`, which cannot be emitted without prepared statements."
+        )]
+        #[diagnostic(help(
+            "Use a built-in PostgreSQL parameter type, add an explicit cast in the query, or enable `prepared_statements`."
+        ))]
+        UnsupportedTypedParameter {
+            #[source_code]
+            src: NamedSource<Arc<String>>,
+            #[label("unsupported parameter type in this query")]
+            query: SourceSpan,
+            col_name: String,
+            col_ty: String,
+        },
     }
 
     impl Error {
@@ -771,5 +814,30 @@ pub(crate) mod error {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use postgres_types::{Kind, Type};
+
+    use super::supports_unprepared_parameter;
+
+    #[test]
+    fn unprepared_parameters_support_builtin_scalars_and_arrays() {
+        assert!(supports_unprepared_parameter(&Type::BOOL));
+        assert!(supports_unprepared_parameter(&Type::INT8));
+        assert!(supports_unprepared_parameter(&Type::TEXT_ARRAY));
+    }
+
+    #[test]
+    fn unprepared_parameters_reject_database_specific_oids() {
+        let custom = Type::new(
+            "custom".to_string(),
+            99_999,
+            Kind::Simple,
+            "public".to_string(),
+        );
+        assert!(!supports_unprepared_parameter(&custom));
     }
 }

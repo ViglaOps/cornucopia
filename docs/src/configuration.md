@@ -27,6 +27,12 @@ async = true
 # Set this to false when using tokio-postgres directly.
 deadpool = true
 
+# Use prepared statements when executing generated queries (default: true).
+# Set this to false for transaction-level poolers such as Cloudflare
+# Hyperdrive. Cornucopia will emit explicit PostgreSQL parameter types and
+# use query_typed_*/execute_typed instead.
+prepared_statements = true
+
 # Generate synchronous code (default: false)
 # Both `sync` and `async` may be enabled at the same time.
 sync = false
@@ -39,6 +45,12 @@ params-only = false
 # Skip query files whose name starts with `_` (default: false).
 ignore-underscore-files = false
 ```
+
+When `prepared_statements = false`, every query parameter must use a built-in
+PostgreSQL type. Built-in array types are supported. Cornucopia reports a
+generation error for extension or user-defined parameter types because their
+OIDs are database-specific; cast those parameters to a built-in type in SQL or
+enable prepared statements.
 
 ~~~admonish warning
 Cornucopia will delete and re-create the `destination` directory on every run. As a safety check, if the destination already exists, does not end with the name `cornucopia`, and does not contain a `Cargo.toml`, the CLI will prompt before continuing. Point `destination` at a directory dedicated to Cornucopia's output to avoid overwrites.

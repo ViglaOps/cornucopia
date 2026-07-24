@@ -25,6 +25,16 @@ impl GenericClient for DeadpoolClient {
     {
         PgClient::execute(self, query, params).await
     }
+    async fn execute_typed(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<u64, Error> {
+        PgClient::execute_typed(self, query, params).await
+    }
     async fn query_one<T>(
         &self,
         statement: &T,
@@ -35,6 +45,16 @@ impl GenericClient for DeadpoolClient {
     {
         PgClient::query_one(self, statement, params).await
     }
+    async fn query_typed_one(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<tokio_postgres::Row, Error> {
+        PgClient::query_typed_one(self, query, params).await
+    }
     async fn query_opt<T>(
         &self,
         statement: &T,
@@ -44,6 +64,16 @@ impl GenericClient for DeadpoolClient {
         T: ?Sized + tokio_postgres::ToStatement + Sync + Send,
     {
         PgClient::query_opt(self, statement, params).await
+    }
+    async fn query_typed_opt(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<Option<tokio_postgres::Row>, Error> {
+        PgClient::query_typed_opt(self, query, params).await
     }
     async fn query<T>(
         &self,
@@ -64,6 +94,16 @@ impl GenericClient for DeadpoolClient {
     {
         PgClient::query_raw(self, statement, params).await
     }
+    async fn query_typed_raw(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<RowStream, Error> {
+        PgClient::query_typed_raw(self, query, crate::slice_iter_typed(params)).await
+    }
 }
 impl GenericClient for DeadpoolTransaction<'_> {
     fn stmt_cache() -> bool {
@@ -82,6 +122,16 @@ impl GenericClient for DeadpoolTransaction<'_> {
     {
         PgTransaction::execute(self, query, params).await
     }
+    async fn execute_typed(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<u64, Error> {
+        PgTransaction::execute_typed(self, query, params).await
+    }
     async fn query_one<T>(
         &self,
         statement: &T,
@@ -92,6 +142,16 @@ impl GenericClient for DeadpoolTransaction<'_> {
     {
         PgTransaction::query_one(self, statement, params).await
     }
+    async fn query_typed_one(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<tokio_postgres::Row, Error> {
+        PgTransaction::query_typed_one(self, query, params).await
+    }
     async fn query_opt<T>(
         &self,
         statement: &T,
@@ -101,6 +161,16 @@ impl GenericClient for DeadpoolTransaction<'_> {
         T: ?Sized + tokio_postgres::ToStatement + Sync + Send,
     {
         PgTransaction::query_opt(self, statement, params).await
+    }
+    async fn query_typed_opt(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<Option<tokio_postgres::Row>, Error> {
+        PgTransaction::query_typed_opt(self, query, params).await
     }
     async fn query<T>(
         &self,
@@ -120,5 +190,15 @@ impl GenericClient for DeadpoolTransaction<'_> {
         I::Item: BorrowToSql,
     {
         PgTransaction::query_raw(self, statement, params).await
+    }
+    async fn query_typed_raw(
+        &self,
+        query: &str,
+        params: &[(
+            &(dyn tokio_postgres::types::ToSql + Sync),
+            postgres_types::Type,
+        )],
+    ) -> Result<RowStream, Error> {
+        PgTransaction::query_typed_raw(self, query, crate::slice_iter_typed(params)).await
     }
 }

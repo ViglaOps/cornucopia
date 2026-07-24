@@ -29,6 +29,8 @@ pub struct Config {
     pub r#async: bool,
     /// Generate deadpool-postgres client support
     pub deadpool: bool,
+    /// Use prepared statements when executing generated queries
+    pub prepared_statements: bool,
     /// Ignore query files prefixed with underscore
     #[serde(rename = "ignore-underscore-files")]
     pub ignore_underscore_files: bool,
@@ -109,6 +111,7 @@ impl Default for Config {
             sync: false,
             r#async: true,
             deadpool: true,
+            prepared_statements: true,
             ignore_underscore_files: false,
             params_only: false,
             types: Types {
@@ -390,6 +393,12 @@ impl ConfigBuilder {
         self
     }
 
+    /// Use prepared statements when executing generated queries
+    pub fn prepared_statements(mut self, prepared_statements: bool) -> Self {
+        self.config.prepared_statements = prepared_statements;
+        self
+    }
+
     /// Enable or disable generation of field metadata for queries
     pub fn generate_field_metadata(mut self, generate: bool) -> Self {
         self.config.generate_field_metadata = generate;
@@ -552,6 +561,17 @@ version = "0.2"
 
         assert!(!Config::from_file(tmpfile.path()).unwrap().deadpool);
         assert!(!Config::builder().deadpool(false).build().deadpool);
+    }
+
+    #[test]
+    fn prepared_statements_default_on_and_can_be_disabled() {
+        assert!(Config::default().prepared_statements);
+        assert!(
+            !Config::builder()
+                .prepared_statements(false)
+                .build()
+                .prepared_statements
+        );
     }
 
     #[test]

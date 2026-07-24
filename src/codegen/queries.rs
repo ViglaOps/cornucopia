@@ -217,7 +217,11 @@ fn gen_row_structs(row: &PreparedItem, ctx: &GenCtx, config: &Config) -> proc_ma
     }
 }
 
-fn gen_row_query(row: &PreparedItem, ctx: &GenCtx) -> proc_macro2::TokenStream {
+fn gen_row_query(
+    row: &PreparedItem,
+    ctx: &GenCtx,
+    prepared_statements: bool,
+) -> proc_macro2::TokenStream {
     let PreparedItem {
         name,
         fields,
@@ -263,10 +267,68 @@ fn gen_row_query(row: &PreparedItem, ctx: &GenCtx) -> proc_macro2::TokenStream {
         syn::parse_str::<syn::Type>(&fields[0].brw_ty(false, ctx)).unwrap()
     };
 
+    let typed_params_field = (!prepared_statements).then_some(quote! {
+        typed_params: [(&'a (dyn postgres_types::ToSql + Sync), postgres_types::Type); N],
+    });
+    let typed_params_copy = (!prepared_statements).then_some(quote! {
+        typed_params: self.typed_params,
+    });
+    let one_call = if prepared_statements {
+        quote! {
+            #client::one(self.client, self.query, &self.params, self.cached)
+        }
+    } else {
+        quote! {
+            #client::one(
+                self.client,
+                self.query,
+                &self.params,
+                &self.typed_params,
+                self.cached,
+            )
+        }
+    };
+    let opt_call = if prepared_statements {
+        quote! {
+            #client::opt(self.client, self.query, &self.params, self.cached)
+        }
+    } else {
+        quote! {
+            #client::opt(
+                self.client,
+                self.query,
+                &self.params,
+                &self.typed_params,
+                self.cached,
+            )
+        }
+    };
+    let raw_call = if prepared_statements {
+        quote! {
+            #client::raw(
+                self.client,
+                self.query,
+                crate::slice_iter(&self.params),
+                self.cached,
+            )
+        }
+    } else {
+        quote! {
+            #client::raw(
+                self.client,
+                self.query,
+                crate::slice_iter(&self.params),
+                &self.typed_params,
+                self.cached,
+            )
+        }
+    };
+
     quote! {
         pub struct #name_ident<'c, 'a, 's, C: GenericClient, T, const N: usize> {
             client: &'c #client_mut C,
             params: [&'a (dyn postgres_types::ToSql + Sync); N],
+            #typed_params_field
             query: &'static str,
             cached: Option<&'s #backend::Statement>,
             extractor: fn(&#backend::Row) -> Result<#row_struct, #backend::Error>,
@@ -281,6 +343,7 @@ fn gen_row_query(row: &PreparedItem, ctx: &GenCtx) -> proc_macro2::TokenStream {
                 #name_ident {
                     client: self.client,
                     params: self.params,
+                    #typed_params_copy
                     query: self.query,
                     cached: self.cached,
                     extractor: self.extractor,
@@ -289,7 +352,7 @@ fn gen_row_query(row: &PreparedItem, ctx: &GenCtx) -> proc_macro2::TokenStream {
             }
 
             pub #fn_async fn one(self) -> Result<T, #backend::Error> {
-                let row = #client::one(self.client, self.query, &self.params, self.cached)#fn_await?;
+                let row = #one_call #fn_await?;
                 Ok((self.mapper)((self.extractor)(&row)?))
             }
 
@@ -298,7 +361,7 @@ fn gen_row_query(row: &PreparedItem, ctx: &GenCtx) -> proc_macro2::TokenStream {
             }
 
             pub #fn_async fn opt(self) -> Result<Option<T>, #backend::Error> {
-                let opt_row = #client::opt(self.client, self.query, &self.params, self.cached)#fn_await?;
+                let opt_row = #opt_call #fn_await?;
                 Ok(opt_row
                     .map(|row| {
                         let extracted = (self.extractor)(&row)?;
@@ -310,7 +373,7 @@ fn gen_row_query(row: &PreparedItem, ctx: &GenCtx) -> proc_macro2::TokenStream {
             pub #fn_async fn iter(
                 self,
             ) -> Result<impl #raw_type<Item = Result<T, #backend::Error>> + 'c, #backend::Error> {
-                let stream = #client::raw(self.client, self.query, crate::slice_iter(&self.params), self.cached)#fn_await?;
+                let stream = #raw_call #fn_await?;
                 let mapped = stream
                     #raw_pre
                     .map(move |res|
@@ -377,6 +440,21 @@ fn gen_query_fn(
         .iter()
         .map(|idx| format_ident!("{}", param_field[*idx].ident.rs))
         .collect();
+
+    let params_pg_ty: Vec<_> = order
+        .iter()
+        .map(|idx| {
+            let oid = proc_macro2::Literal::u32_unsuffixed(param_field[*idx].pg_ty.oid());
+            quote! {
+                postgres_types::Type::from_oid(#oid)
+                    .expect("Cornucopia validated this built-in PostgreSQL parameter type")
+            }
+        })
+        .collect();
+
+    let typed_params_init = (!config.prepared_statements).then_some(quote! {
+        typed_params: [#((#params_name, #params_pg_ty),)*],
+    });
 
     let traits_bounds: Vec<_> = traits
         .iter()
@@ -446,6 +524,7 @@ fn gen_query_fn(
                     #row_name_query_ident {
                         client,
                         params: [#(#params_name,)*],
+                        #typed_params_init
                         query: self.0,
                         cached: self.1.as_ref(),
                         extractor: #extractor,
@@ -467,6 +546,7 @@ fn gen_query_fn(
                     #row_name_query_ident {
                         client,
                         params: [#(#params_name,)*],
+                        #typed_params_init
                         query: self.0,
                         cached: self.1.as_ref(),
                         extractor: |row| Ok(row.try_get(0)?),
@@ -484,13 +564,28 @@ fn gen_query_fn(
             })
             .collect();
 
-        quote! {
-            #bind_visibility #fn_async fn bind<'c, 'a, 's, C: GenericClient, #(#traits_idents: #traits_bounds,)*>(
-                &'s self,
-                client: &'c #client_mut C,
-                #(#params_name: &'a #params_ty,)*
-            ) -> Result<u64, #backend::Error> {
-                client.execute(self.0, &[#(#params_wrap,)*])#fn_await
+        if config.prepared_statements {
+            quote! {
+                #bind_visibility #fn_async fn bind<'c, 'a, 's, C: GenericClient, #(#traits_idents: #traits_bounds,)*>(
+                    &'s self,
+                    client: &'c #client_mut C,
+                    #(#params_name: &'a #params_ty,)*
+                ) -> Result<u64, #backend::Error> {
+                    client.execute(self.0, &[#(#params_wrap,)*])#fn_await
+                }
+            }
+        } else {
+            quote! {
+                #bind_visibility #fn_async fn bind<'c, 'a, 's, C: GenericClient, #(#traits_idents: #traits_bounds,)*>(
+                    &'s self,
+                    client: &'c #client_mut C,
+                    #(#params_name: &'a #params_ty,)*
+                ) -> Result<u64, #backend::Error> {
+                    client.execute_typed(
+                        self.0,
+                        &[#((#params_wrap, #params_pg_ty),)*],
+                    )#fn_await
+                }
             }
         }
     };
@@ -689,7 +784,7 @@ fn gen_specific(
     let mut tokens = quote!(#imports);
 
     for row in module.rows.values() {
-        let row_tokens = gen_row_query(row, &ctx);
+        let row_tokens = gen_row_query(row, &ctx, config.prepared_statements);
         tokens.extend(quote!(#row_tokens));
     }
 
